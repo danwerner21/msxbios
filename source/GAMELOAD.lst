@@ -1,0 +1,40 @@
+0001   0000             ;___GAME_LOADER________________________________________________________________________________________
+0002   0000             ;
+0003   0000             ;  
+0004   0000             ;  CREATED BY : 	ANDREW LYNCH 15-FEB-2007
+0005   0000             ;  MODIFIED BY : 	DAN WERNER 11.7.2010
+0006   0000             ;
+0007   0000             ;______________________________________________________________________________________________________
+0008   0000             
+0009   0000             
+0010   0000             
+0011   0000             
+0012   0000             ;*******************************************************************
+0013   0000             ;*	START AFTER RESET
+0014   0000             ;*	FUNCTION	: READY SYSTEM, LOAD MONITOR INTO RAM AND START
+0015   0000             ;*******************************************************************
+0016   0000             
+0017   0100             	 .ORG	00100h
+0018   0100             
+0019   0100 F3          	DI			; DISABLE INTERRUPT
+0020   0101             
+0021   0101 21 0F 01    	LD	HL,BEGIN_CODE	; FROM
+0022   0104 11 00 FF            LD	DE,$FF00	; TO
+0023   0107 01 30 00    	LD	BC,$0030	; NUMBER OF BYTES TO MOVE 
+0024   010A ED B0       	LDIR			; PERFORM BLOCK COPY 
+0025   010C C3 00 FF    	JP	$FF00		; JUMP TO START 
+0026   010F             
+0027   010F             	
+0028   010F             BEGIN_CODE:	
+0029   010F 21 1D 01    	LD	HL,END_CODE			; FROM
+0030   0112 11 00 00            LD	DE,$0000			; TO
+0031   0115 01 00 D0    	LD	BC,$D000			; NUMBER OF BYTES TO MOVE 
+0032   0118 ED B0       	LDIR					; PERFORM BLOCK COPY 
+0033   011A C3 00 00    	JP	$0000		; JUMP TO START 
+0034   011D             END_CODE:
+0035   011D             	
+0036   011D             
+0037   011D             
+0038   011D              .END
+0039   011D              
+tasm: Number of errors = 0
