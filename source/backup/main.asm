@@ -1,16 +1,15 @@
-;_CBIOS_RETROBREW______________________________________________________________________________________________________
+;_CBIOS_N8VEM______________________________________________________________________________________________________
 ;
 ;
 ;  The following code is a heavily modified version of the C-BIOS ROM. (See below disclaimer)
-;  It has been modified for use with the RETROBREW, and the RETROBREW HC series of computers.   Strict MSX1 compatibility
+;  It has been modified for use with the N8VEM, and the N8VEM HC series of computers.   Strict MSX1 compatibility
 ;  is no longer maintained in this version, but, it aims to be as compatible as possible within the contraints
-;  of the RETROBREW hardware.   Extra features not supported by the RETROBREW hardware were removed to conserve ROM space
+;  of the N8VEM hardware.   Extra features not supported by the N8VEM hardware were removed to conserve ROM space
 ;  and improve maintainability of the system.
 ;
-;  Some features have been added to further support the RETROBREW systems
+;  Some features have been added to further support the N8VEM system
 ;
 ;  Conversion done by:   Dan Werner	11/1/2010
-;  Duodyne support: D.Werner 3/16/2024
 ;__________________________________________________________________________________________________________________
 ;
 ;
@@ -590,7 +589,7 @@ romid:
 ; Registers: All
 ; Remark   : After this, a jump must be made to INIT, for further initialisation.
 chkram:
-        IM      1
+
         IF     PLATFORM=1
         LD      A,$FE
         OUT     (VDP_ACR),A                       ; INITIALIZE ACR REGISTER FOR DUODYNE HARDWARE
@@ -598,7 +597,7 @@ chkram:
 
         IF     PLATFORM=3
         LD      A,$FD
-        OUT     (VDP_ACR),A                       ; INITIALIZE ACR REGISTER FOR RETROBREW HARDWARE
+        OUT     (VDP_ACR),A                       ; INITIALIZE ACR REGISTER FOR N8VEM HARDWARE
         ENDIF
 
 ;----------------------
@@ -1793,15 +1792,15 @@ gtstck:
         IF      KB_USE_SERIAL=1
             CALL    key_in
 
-            LD      A,(RETROBREW_KB_STICK_CACHE)
+            LD      A,(N8VEM_KB_STICK_CACHE)
             AND     $0F
-            JP      Z,GSTICK_RETROBREW_END                ; IF NO DATA END
+            JP      Z,GSTICK_N8VEM_END                ; IF NO DATA END
             LD      B,A
-            LD      A,(RETROBREW_KB_STICK_CACHE)
+            LD      A,(N8VEM_KB_STICK_CACHE)
             AND     $F0
-            LD      (RETROBREW_KB_STICK_CACHE),A
+            LD      (N8VEM_KB_STICK_CACHE),A
             LD      A,B
-GSTICK_RETROBREW_END:
+GSTICK_N8VEM_END:
             PUSH    hl
             LD      hl,joypos_kbd_tbl
             LD      d,0
@@ -1825,7 +1824,7 @@ joy_stc1:
         LD      e,$00
         DEC     a
         JR      z,sel_stc1
-; RETROBREW SITCK 2
+; N8VEM SITCK 2
         LD      a,$0F
         JR      N8_STKREAD
 sel_stc1:
@@ -1867,47 +1866,47 @@ joypos_kbd_tbl:
         DB      $03,$00,$02,$01,$04,$05,$03,$00
 
 
-RETROBREW_KB_STICK:
-        LD      A,(RETROBREW_KB_STICK_CACHE)
+N8VEM_KB_STICK:
+        LD      A,(N8VEM_KB_STICK_CACHE)
         CP      00
-        JP      NZ,RETROBREW_KB_STICK_END
+        JP      NZ,N8VEM_KB_STICK_END
         LD      A,B
         CP      'S'                               ;
-        JP      Z,RETROBREW_KB_STICK_R
+        JP      Z,N8VEM_KB_STICK_R
         CP      'Z'                               ;
-        JP      Z,RETROBREW_KB_STICK_D
+        JP      Z,N8VEM_KB_STICK_D
         CP      'W'                               ;
-        JP      Z,RETROBREW_KB_STICK_U
+        JP      Z,N8VEM_KB_STICK_U
         CP      'A'                               ;
-        JP      Z,RETROBREW_KB_STICK_L
+        JP      Z,N8VEM_KB_STICK_L
         CP      ' '                               ;
-        JP      Z,RETROBREW_KB_STICK_B
-        JP      RETROBREW_KB_STICK_NONE
-RETROBREW_KB_STICK_R:
+        JP      Z,N8VEM_KB_STICK_B
+        JP      N8VEM_KB_STICK_NONE
+N8VEM_KB_STICK_R:
         LD      A,%00001000
-        LD      (RETROBREW_KB_STICK_CACHE),A
+        LD      (N8VEM_KB_STICK_CACHE),A
         RET
-RETROBREW_KB_STICK_D:
+N8VEM_KB_STICK_D:
         LD      A,%00000100
-        LD      (RETROBREW_KB_STICK_CACHE),A
+        LD      (N8VEM_KB_STICK_CACHE),A
         RET
-RETROBREW_KB_STICK_U:
+N8VEM_KB_STICK_U:
         LD      A,%00000010
-        LD      (RETROBREW_KB_STICK_CACHE),A
+        LD      (N8VEM_KB_STICK_CACHE),A
         RET
-RETROBREW_KB_STICK_L:
+N8VEM_KB_STICK_L:
         LD      A,%00000001
-        LD      (RETROBREW_KB_STICK_CACHE),A
+        LD      (N8VEM_KB_STICK_CACHE),A
         RET
-RETROBREW_KB_STICK_B:
+N8VEM_KB_STICK_B:
         LD      A,%00010000
-        LD      (RETROBREW_KB_STICK_CACHE),A
+        LD      (N8VEM_KB_STICK_CACHE),A
         RET
-RETROBREW_KB_STICK_NONE:
+N8VEM_KB_STICK_NONE:
         LD      A,%00000000
-RETROBREW_KB_STICK_END:
+N8VEM_KB_STICK_END:
         RET
-RETROBREW_KB_STICK_CACHE:
+N8VEM_KB_STICK_CACHE:
         DB      00
 
 ;--------------------------------
@@ -1932,12 +1931,12 @@ gttrig_space:
 ; Keyboard (spacebar)
         IF      KB_USE_SERIAL=1
             CALL    key_in
-            LD      A,(RETROBREW_KB_STICK_CACHE)
+            LD      A,(N8VEM_KB_STICK_CACHE)
             AND     $F0
             RET     Z                                 ; IF NO DATA END
-            LD      A,(RETROBREW_KB_STICK_CACHE)
+            LD      A,(N8VEM_KB_STICK_CACHE)
             AND     $0F
-            LD      (RETROBREW_KB_STICK_CACHE),A
+            LD      (N8VEM_KB_STICK_CACHE),A
             LD      A,$FF
             RET
             .ELSE
@@ -2108,7 +2107,7 @@ calc_queue_address:
 ;             not #00 is lamp off
 ; Registers: AF
 chgcap:
-;// TODO: RETROBREW code
+;// TODO: n8vem code
         RET
 
 ;--------------------------------
@@ -2191,6 +2190,7 @@ kilbuf:
 ; Riseout , Replicart
 
 keyint:
+        DI
         PUSH    hl
         PUSH    de
         PUSH    bc
@@ -2252,13 +2252,13 @@ keyint:
         AND     $01
         LD      (TRGFLG),a
 
-       IF      KB_USE_SERIAL=1
-           CALL    key_in
-       ENDIF
+      ;  IF      KB_USE_SERIAL=1
+      ;      CALL    key_in
+      ;  ENDIF
 
-       IF      KB_USE_PS2=1
-           CALL    KB_PROCESS
-       ENDIF
+      ;  IF      KB_USE_PS2=1
+      ;      CALL    KB_PROCESS
+      ;  ENDIF
 
 
 int_end:
@@ -2288,12 +2288,12 @@ nmi:
 key_in:
         IN      A,(UART5)                         ; READ LINE STATUS REGISTER
         BIT     0,A                               ; TEST IF DATA IN RECEIVE BUFFER
-        JP      Z,RETROBREW_KEY_END                   ; IF NO DATA END
+        JP      Z,N8VEM_KEY_END                   ; IF NO DATA END
         IN      A,(UART0)                         ; THEN READ THE CHAR FROM THE UART
         PUSH    AF                                ;
         PUSH    BC                                ;
         LD      B,A                               ;
-        CALL    RETROBREW_KB_STICK                    ;
+        CALL    N8VEM_KB_STICK                    ;
         POP     BC                                ;
         POP     AF                                ;
         PUSH    hl                                ;
@@ -2306,7 +2306,7 @@ KEY_IN1:
         CALL    key_put_into_buf                  ;
 KEY_IN2:
         POP     hl                                ;
-RETROBREW_KEY_END:
+N8VEM_KEY_END:
         RET
 
 
@@ -2462,11 +2462,7 @@ lp_strprn:
 
 str_proginfo:
 ;       [01234567890123456789012345678]
-        IF      PLATFORM=1
-        DB      "DUODYNE BIOS 0.1     MSX C-BIOS"
-        ELSE
-        DB      "RETROBREW BIOS 0.1     MSX C-BIOS"
-        ENDIF
+        DB      "N8VEM BIOS 0.1     MSX C-BIOS"
 ;include "../derived/asm/version.asm"
         DB      $0D,$0A,$0D,$0A,$0D,$0A,$00
 
@@ -2488,8 +2484,7 @@ str_nocart:
 vdp_bios:
         DB      $00,$80,$70,$81,$00,$82,$01,$84
         DB      $F5,$87,$00,$40
-
-;   INCLUDE "PS2KEYB.ASM"
+;	INCLUDE "PS2KEYB.ASM"
 ;   INCLUDE "ROMMON.asm"
 ;   INCLUDE "BASIC.asm"
 

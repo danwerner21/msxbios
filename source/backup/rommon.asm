@@ -34,13 +34,6 @@ UART4           EQU $5C                           ; MODEM CONTROL
 UART5           EQU $5D                           ; LINE STATUS
 UART6           EQU $5E                           ; MODEM STATUS
 UART7           EQU $5F                           ; SCRATCH REG.
-
-
-BANK00          EQU $50
-BANK40          EQU $51
-BANK80          EQU $52
-BANKC0          EQU $53
-BANK_ENABLE     EQU $54
 ;
 ;
 ;
@@ -107,30 +100,11 @@ MONITORCMDLOOP:
         JP      Z,MOVE                            ; MOVE MEMORY COMMAND
         CP      'F'                               ; IS IT A "F" (Y/N)
         JP      Z,FILL                            ; FILL MEMORY COMMAND
-        CP      'E'                               ; IS IT A "E" (Y/N)
-        JP      Z,ENABLE                          ; ENABLE INTERRUPTS
-        CP      'Z'                               ; IS IT A "Z" (Y/N)
-        JP      Z,DISABLE                         ; DISABLE INTERRUPTS
-        CP      'B'                               ; IS IT A "B" (Y/N)
-        JP      Z,BANK                            ; DISABLE INTERRUPTS
         LD      HL,TXT_COMMAND                    ; POINT AT ERROR TEXT
         CALL    prn_text                          ; PRINT COMMAND LABEL
 
         JR      MONITORCMDLOOP
 
-
-BANK:
-        LD      C,BANKC0
-        LD      A,85H
-        OUT     (C),A
-        JP      $8004
-
-ENABLE:
-        EI
-                JP      $8004
-DISABLE:
-        DI
-                JP      $8004
 
 
 
@@ -156,9 +130,6 @@ MONGETLN_L:
         CP      80
         JP      nz,MONGETLN_L
 MONGETLN_X:
-        LD      (HL),0
-        LD      HL,IN_BUFFER
-        INC     C
         POP     af
         POP     DE                                ; RESTORE DE
         RET
@@ -182,24 +153,12 @@ TX_BUSYLP:
         JP      Z,TX_BUSYLP                       ; IF NOT REPEAT
 
         LD      A,(HL)
-        CP      00H                               ; END OF LINE?
         JP      Z,prn_text_exit
         INC     HL
         OUT     (UART0),A                         ; THEN WRITE THE CHAR TO UART
-        JP      TX_BUSYLP                         ; IF NOT REPEAT
+        JP      TX_BUSYLP                      ; IF NOT REPEAT
 prn_text_exit:
         POP     AF
-        RET
-
-
-prnchar:
-        PUSH    AF
-TX_BUSYLP1:
-        IN      A,(UART5)                         ; READ Line Status Register
-        BIT     5,A                               ; TEST IF UART IS READY TO SEND
-        JP      Z,TX_BUSYLP1                       ; IF NOT REPEAT
-        POP     AF
-        OUT     (UART0),A                         ; THEN WRITE THE CHAR TO UART
         RET
 
 
@@ -284,7 +243,7 @@ HXOUT:
         JR      C,OUT1                            ; IF CY SET PRINT 'NUMBER'
         ADD     A,07H                             ; MAKE IT AN ALPHA
 OUT1:
-        CALL    prnchar                           ; SCREEN IT
+        CALL    $00A2                             ; SCREEN IT
         LD      A,B                               ; NEXT NIBBLE
         AND     0FH                               ; JUST THIS
         ADD     A,30H                             ; TRY A NUMBER
@@ -292,7 +251,7 @@ OUT1:
         JR      C,OUT2                            ; PRINT 'NUMBER'
         ADD     A,07H                             ; MAKE IT ALPHA
 OUT2:
-        CALL    prnchar                           ; SCREEN IT
+        CALL    $00A2                             ; SCREEN IT
         POP     AF                                ;
         POP     BC                                ; RESTORE BC
         RET                                       ;
@@ -306,7 +265,7 @@ OUT2:
 SPACE:
         PUSH    AF                                ; STORE AF
         LD      A,20H                             ; LOAD A "SPACE"
-        CALL    prnchar                             ; SCREEN IT
+        CALL    $00A2                             ; SCREEN IT
         POP     AF                                ; RESTORE AF
         RET                                       ; DONE
 
@@ -408,7 +367,7 @@ PROGRMLP:
         INC     DE                                ; NEXT ADDRESS;
         CALL    CRLFA                             ; CR,LF,>
         LD      A,'P'                             ;
-        CALL    prnchar                             ;
+        CALL    $00A2                             ;
         CALL    SPACE                             ;
         LD      H,D                               ;
         LD      L,E                               ;
@@ -484,7 +443,7 @@ PCRLF0:
         JR      NZ,PDOT                           ;
         LD      A,2EH                             ; LOAD A DOT
 PDOT:
-        CALL    prnchar                             ; PRINT IT
+        CALL    $00A2                             ; PRINT IT
         INC     HL                                ;
         LD      A,D                               ;
         CP      H                                 ;
@@ -659,10 +618,10 @@ PROMPT:
         DB      CR,LF,'>',ENDT
 
 TXT_IDENT:
-        DB      "DUODYNE TEST CARTRIDGE V0.1"
+        DB      "N8VEM HOME COMPUTER  MSX BIOS V0.1"
         DB      CR,LF,ENDT
 TXT_READY:
-        DB      "MONITOR READY. "
+        DB      "MONITOR READY "
         DB      CR,LF,ENDT
 
 TXT_COMMAND:

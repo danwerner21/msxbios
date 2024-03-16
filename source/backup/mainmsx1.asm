@@ -30,9 +30,9 @@
         INCLUDE "hardware.asm"
 
         IF      PLATFORM=1
-VDP                 EQU V9958
+VDP                 EQU TMS99X8
 MODEL_MSX           EQU MODEL_MSX1
-RETROBREW           EQU 1
+N8VEM               EQU 1
         ENDIF
 
 

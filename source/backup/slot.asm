@@ -17,11 +17,11 @@ rdslt:
         PUSH    hl
         DI
         PUSH    AF
-        AND     %00001100                         ; RETROBREW SUPPORTS CART READER IN SLOT 1
+        AND     %00001100                         ; N8VEM SUPPORTS CART READER IN SLOT 1
         CP      %00000100
         JP      NZ,RDSLTEXIT                      ;
         POP     AF
-        AND     %00000011                         ; RETROBREW SUPPORTS CART PAGES 1 AND 2
+        AND     %00000011                         ; N8VEM SUPPORTS CART PAGES 1 AND 2
         CP      %00000001                         ; SLOT 1?
         JP      NZ,RDSLTNOTP1                     ;
         LD      A,H                               ;
@@ -73,7 +73,7 @@ rdsft_lp:
 ; Output:  Interrupts disabled.
 ; Changes: AF, BC, D
 wrslt:
-;  WRITING TO A SLOT IS NOT SUPPORTED WITH RETROBREW HARDWARE
+;  WRITING TO A SLOT IS NOT SUPPORTED WITH N8VEM HARDWARE
         RET
 
 ;-------------------------------------
@@ -85,7 +85,7 @@ wrslt:
 ;            of the Z-80 or IX and IY
 
 calslt:
-; EXECUTING CODE FROM CARTS IS NOT SUPPORTED ON THE RETROBREW
+; EXECUTING CODE FROM CARTS IS NOT SUPPORTED ON THE N8VEM
 ; TODO: USE BANK SWITCHING TO COPY CODE INTO A RAM BANK AND EXECUTE THERE
         RET
 
