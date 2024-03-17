@@ -1,0 +1,692 @@
+rommon.asm:
+     1                          ;___ROM_MONITOR_PROGRAM_____________________________________________________________________________________________________________
+     2                          ;
+     3                          ;  ORIGINAL CODE BY:	ANDREW LYNCH (LYNCHAJ@YAHOO COM)	13 FEB 2007
+     4                          ;
+     5                          ;  MODIFIED BY : 	DAN WERNER 03 09.2009
+     6                          ;
+     7                          ;__REFERENCES________________________________________________________________________________________________________________________
+     8                          ; THOMAS SCHERRER BASIC HAR.DWARE TEST ASSEMBLER SOURCES FROM THE Z80 INFO PAGE
+     9                          ; INCLUDING ORIGINAL SCHEMATIC CONCEPT
+    10                          ; HTTP://Z80 INFO/Z80SOURC.TXT
+    11                          ; CODE SAMPLES FROM BRUCE JONES PUBLIC DOMAIN ROM MONITOR FOR THE SBC-200C
+    12                          ; HTTP://WWW RETROTECHNOLOGY.COM/HERBS_STUFF/SD_BRUCE_CODE.ZIP
+    13                          ; INSPIRATION FROM JOEL OWENS "Z-80 SPACE-TIME PRODUCTIONS SINGLE BOARD COMPUTER"
+    14                          ; HTTP://WWW JOELOWENS.ORG/Z80/Z80INDEX.HTML
+    15                          ; GREAT HELP AND TECHNICAL ADVICE FROM ALLISON AT ALPACA_DESIGNERS
+    16                          ; HTTP://GROUPS YAHOO.COM/GROUP/ALPACA_DESIGNERS
+    17                          ; INTEL SDK-85 ROM DEBUG MONITOR
+    18                          ;
+    19                          ;
+    20                          ;
+    21                          ;__CONSTANTS_________________________________________________________________________________________________________________________
+    22                          ;
+    23                          ENDT            EQU 00h                           ; MARK END OF TEXT
+    24                          CR              EQU 0DH                           ; ASCII CARRIAGE RETURN CHARACTER
+    25                          LF              EQU 0AH                           ; ASCII LINE FEED CHARACTER
+    26                          ESC             EQU 1BH                           ; ASCII ESCAPE CHARACTER
+    27                          BS              EQU 08H                           ; ASCII BACKSPACE CHARACTER
+    28                          
+    29                          UART0           EQU $58                           ; DATA IN/OUT
+    30                          UART1           EQU $59                           ; INTERRUPT ENABLE
+    31                          UART2           EQU $5A                           ; INTERRUPT IDENTIFICATION/FIFO CONTROL
+    32                          UART3           EQU $5B                           ; LINE CONTROL
+    33                          UART4           EQU $5C                           ; MODEM CONTROL
+    34                          UART5           EQU $5D                           ; LINE STATUS
+    35                          UART6           EQU $5E                           ; MODEM STATUS
+    36                          UART7           EQU $5F                           ; SCRATCH REG.
+    37                          
+    38                          
+    39                          BANK00          EQU $50
+    40                          BANK40          EQU $51
+    41                          BANK80          EQU $52
+    42                          BANKC0          EQU $53
+    43                          BANK_ENABLE     EQU $54
+    44                          ;
+    45                          ;
+    46                          ;
+    47                          ;__MAIN_PROGRAM_____________________________________________________________________________________________________________________
+    48                          ;
+    49                          
+    50                          
+    51                                  ORG     $8000
+    52  0000  41420480                  DB      'A','B',$04,$80
+    53                          
+    54                          ;__DOTINYMON___________________________________________________________________________________________________________________
+    55                          ;
+    56                          ;	MONITOR STARTUP
+    57                          ;________________________________________________________________________________________________________________________________
+    58                          ;
+    59                          
+    60                          DOTINYMON:                                        ; CALL HERE FOR MONITOR WARM START
+    61                          
+    62  0004  af                        XOR     A                                 ;ZERO OUT ACCUMULATOR (ADDED)
+    63  0005  e5                        PUSH    HL                                ;PROTECT HL FROM OVERWRITE
+    64  0006  216602                    LD      HL,TXT_IDENT                      ;POINT AT TEXT
+    65  0009  cd9200                    CALL    prn_text                          ;SHOW WE'RE HERE
+    66  000c  218402                    LD      HL,TXT_READY                      ;POINT AT TEXT
+    67  000f  cd9200                    CALL    prn_text                          ;SHOW WE'RE HERE
+    68  0012  e1                        POP     HL                                ;PROTECT HL FROM OVERWRITE
+    69                          
+    70                          ;
+    71                          ;__MONITOR_COMMANDS_________________________________________________________________________________________________________
+    72                          ;
+    73                          ; B XX BOOT CPM FROM DRIVE XX
+    74                          ; D XXXXH YYYYH  DUMP MEMORY FROM XXXX TO YYYY
+    75                          ; F XXXXH YYYYH ZZH FILL MEMORY FROM XXXX TO YYYY WITH ZZ
+    76                          ; I INPUT FROM PORT AND SHOW HEX DATA
+    77                          ; M XXXXH YYYYH ZZZZH MOVE MEMORY BLOCK XXXX TO YYYY TO ZZZZ
+    78                          ; O OUTPUT TO PORT HEX DATA
+    79                          ; P XXXXH YYH PROGRAM RAM FROM XXXXH WITH VALUE IN YYH, WILL PROMPT FOR NEXT LINES FOLLOWING UNTIL CR
+    80                          ; R RUN A PROGRAM FROM CURRENT LOCATION
+    81                          
+    82                          
+    83                          
+    84                          ;__COMMAND_PARSE_________________________________________________________________________________________________________________
+    85                          ;
+    86                          ;	PROMPT USER FOR COMMANDS, THEN PARSE THEM
+    87                          ;________________________________________________________________________________________________________________________________
+    88                          ;
+    89                          
+    90                          MONITORCMDLOOP:
+    91  0013  cd4701                    CALL    CRLFA                             ; CR,LF,>
+    92  0016  cd6600                    CALL    MONGETLN                          ; GET A LINE OF INPUT FROM THE USER
+    93  0019  7e                        LD      A,(HL)                            ; LOAD FIRST CHAR INTO A (THIS SHOULD BE THE COMMAND)
+    94  001a  23                        INC     HL                                ; INC POINTER
+    95                          
+    96  001b  fe52                      CP      'R'                               ; IS IT "R" (Y/N)
+    97  001d  ca5001                    JP      Z,MONRUN                          ; IF YES GO RUN ROUTINE
+    98  0020  fe50                      CP      'P'                               ; IS IT "P" (Y/N)
+    99  0022  ca5501                    JP      Z,PROGRM                          ; IF YES GO PROGRAM ROUTINE
+   100  0025  fe4f                      CP      'O'                               ; IS IT AN "O" (Y/N)
+   101  0027  ca2901                    JP      Z,MONPOUT                         ; PORT OUTPUT
+   102  002a  fe49                      CP      'I'                               ; IS IT AN "I" (Y/N)
+   103  002c  ca3701                    JP      Z,PIN                             ; PORT INPUT
+   104  002f  fe44                      CP      'D'                               ; IS IT A "D" (Y/N)
+   105  0031  ca8601                    JP      Z,DUMP                            ; DUMP MEMORY
+   106  0034  fe4d                      CP      'M'                               ; IS IT A "M" (Y/N)
+   107  0036  cae201                    JP      Z,MOVE                            ; MOVE MEMORY COMMAND
+   108  0039  fe46                      CP      'F'                               ; IS IT A "F" (Y/N)
+   109  003b  ca2302                    JP      Z,FILL                            ; FILL MEMORY COMMAND
+   110  003e  fe45                      CP      'E'                               ; IS IT A "E" (Y/N)
+   111  0040  ca5e00                    JP      Z,ENABLE                          ; ENABLE INTERRUPTS
+   112  0043  fe5a                      CP      'Z'                               ; IS IT A "Z" (Y/N)
+   113  0045  ca6200                    JP      Z,DISABLE                         ; DISABLE INTERRUPTS
+   114  0048  fe42                      CP      'B'                               ; IS IT A "B" (Y/N)
+   115  004a  ca5500                    JP      Z,BANK                            ; DISABLE INTERRUPTS
+   116  004d  219602                    LD      HL,TXT_COMMAND                    ; POINT AT ERROR TEXT
+   117  0050  cd9200                    CALL    prn_text                          ; PRINT COMMAND LABEL
+   118                          
+   119  0053  18be                      JR      MONITORCMDLOOP
+   120                          
+   121                          
+   122                          BANK:
+   123  0055  0e53                      LD      C,BANKC0
+   124  0057  3e85                      LD      A,85H
+   125  0059  ed79                      OUT     (C),A
+   126  005b  c30480                    JP      $8004
+   127                          
+   128                          ENABLE:
+   129  005e  fb                        EI
+   130  005f  c30480                            JP      $8004
+   131                          DISABLE:
+   132  0062  f3                        DI
+   133  0063  c30480                            JP      $8004
+   134                          
+   135                          
+   136                          
+   137                          
+   138                          ;__MONGETLN_________________________________________________________________________________________________________________________
+   139                          ;
+   140                          ;	READ A LINE(80) OF TEXT , HANDLE <BS>, TERM ON <CR>
+   141                          ;       EXIT IF TOO MANY CHARS    STORE RESULT IN HL.  CHAR COUNT IN C.
+   142                          ;________________________________________________________________________________________________________________________________
+   143                          ;
+   144                          MONGETLN:
+   145  0066  0e00                      LD      C,00H                             ; ZERO CHAR COUNTER
+   146  0068  21a902                    LD      HL,IN_BUFFER
+   147  006b  d5                        PUSH    DE                                ; STORE DE
+   148  006c  f5                        PUSH    af
+   149                          MONGETLN_L:
+   150  006d  cd8600                    CALL    getch
+   151  0070  fe0d                      CP      13
+   152  0072  ca7d00                    JP      z,MONGETLN_X
+   153  0075  77                        LD      (HL),A
+   154  0076  23                        INC     HL
+   155  0077  0c                        INC     C
+   156  0078  fe50                      CP      80
+   157  007a  c26d00                    JP      nz,MONGETLN_L
+   158                          MONGETLN_X:
+   159  007d  3600                      LD      (HL),0
+   160  007f  21a902                    LD      HL,IN_BUFFER
+   161  0082  0c                        INC     C
+   162  0083  f1                        POP     af
+   163  0084  d1                        POP     DE                                ; RESTORE DE
+   164  0085  c9                        RET
+   165                          
+   166                          
+   167                          getch:
+   168  0086  db5d                      IN      A,(UART5)                         ; READ Line Status Register
+   169  0088  e601                      AND     %00000001                         ; RX ready?
+   170  008a  ca8600                    JP      Z,getch                           ; No, wait
+   171  008d  db58                      IN      A,(UART0)                         ; READ DATA
+   172  008f  d358                      OUT     (UART0),A                         ; THEN WRITE THE CHAR TO UART
+   173  0091  c9                        RET
+   174                          
+   175                          
+   176                          
+   177                          prn_text:
+   178  0092  f5                        PUSH    AF
+   179                          TX_BUSYLP:
+   180  0093  db5d                      IN      A,(UART5)                         ; READ Line Status Register
+   181  0095  cb6f                      BIT     5,A                               ; TEST IF UART IS READY TO SEND
+   182  0097  ca9300                    JP      Z,TX_BUSYLP                       ; IF NOT REPEAT
+   183                          
+   184  009a  7e                        LD      A,(HL)
+   185  009b  fe00                      CP      00H                               ; END OF LINE?
+   186  009d  caa600                    JP      Z,prn_text_exit
+   187  00a0  23                        INC     HL
+   188  00a1  d358                      OUT     (UART0),A                         ; THEN WRITE THE CHAR TO UART
+   189  00a3  c39300                    JP      TX_BUSYLP                         ; IF NOT REPEAT
+   190                          prn_text_exit:
+   191  00a6  f1                        POP     AF
+   192  00a7  c9                        RET
+   193                          
+   194                          
+   195                          prnchar:
+   196  00a8  f5                        PUSH    AF
+   197                          TX_BUSYLP1:
+   198  00a9  db5d                      IN      A,(UART5)                         ; READ Line Status Register
+   199  00ab  cb6f                      BIT     5,A                               ; TEST IF UART IS READY TO SEND
+   200  00ad  caa900                    JP      Z,TX_BUSYLP1                       ; IF NOT REPEAT
+   201  00b0  f1                        POP     AF
+   202  00b1  d358                      OUT     (UART0),A                         ; THEN WRITE THE CHAR TO UART
+   203  00b3  c9                        RET
+   204                          
+   205                          
+   206                          
+   207                          ;__CRLF__________________________________________________________________________________________________________________________
+   208                          ;
+   209                          ;	SEND CR & LF
+   210                          ;________________________________________________________________________________________________________________________________
+   211                          ;
+   212                          CRLF:
+   213  00b4  e5                        PUSH    HL                                ; PROTECT HL FROM OVERWRITE
+   214  00b5  215f02                    LD      HL,TCRLF                          ; LOAD MESSAGE POINTER
+   215  00b8  cd9200                    CALL    prn_text                          ; SEBD MESSAGE
+   216  00bb  e1                        POP     HL                                ; PROTECT HL FROM OVERWRITE
+   217  00bc  c9                        RET                                       ;
+   218                          
+   219                          
+   220                          ;__LDHL__________________________________________________________________________________________________________________________
+   221                          ;
+   222                          ;	GET ONE WORD OF HEX DATA FROM BUFFER POINTED TO BY HL , RETURN IN HL
+   223                          ;________________________________________________________________________________________________________________________________
+   224                          ;
+   225                          LDHL:
+   226  00bd  d5                        PUSH    DE                                ; STORE DE
+   227  00be  cdc900                    CALL    HEXIN                             ; GET K B. AND MAKE HEX
+   228  00c1  57                        LD      D,A                               ; THATS THE HI BYTE
+   229  00c2  cdc900                    CALL    HEXIN                             ; DO HEX AGAIN
+   230  00c5  6f                        LD      L,A                               ; THATS THE LOW BYTE
+   231  00c6  62                        LD      H,D                               ; MOVE TO HL
+   232  00c7  d1                        POP     DE                                ; RESTORE BC
+   233  00c8  c9                        RET                                       ; GO BACK WITH ADDRESS
+   234                          
+   235                          
+   236                          ;__HEXIN__________________________________________________________________________________________________________________________
+   237                          ;
+   238                          ;	GET ONE BYTE OF HEX DATA FROM BUFFER IN HL, RETURN IN A
+   239                          ;________________________________________________________________________________________________________________________________
+   240                          ;
+   241                          HEXIN:
+   242  00c9  c5                        PUSH    BC                                ;SAVE BC REGS
+   243  00ca  cddc00                    CALL    NIBL                              ;DO A NIBBLE
+   244  00cd  cb07                      RLC     A                                 ;MOVE FIRST BYTE UPPER NIBBLE
+   245  00cf  cb07                      RLC     A                                 ;
+   246  00d1  cb07                      RLC     A                                 ;
+   247  00d3  cb07                      RLC     A                                 ;
+   248  00d5  47                        LD      B,A                               ; SAVE ROTATED BYTE
+   249  00d6  cddc00                    CALL    NIBL                              ; DO NEXT NIBBLE
+   250  00d9  80                        ADD     A,B                               ; COMBINE NIBBLES IN ACC
+   251  00da  c1                        POP     BC                                ; RESTORE BC
+   252  00db  c9                        RET                                       ; DONE
+   253                          NIBL:
+   254  00dc  7e                        LD      A,(HL)                            ; GET K B. DATA
+   255  00dd  23                        INC     HL                                ; INC KB POINTER
+   256  00de  fe40                      CP      40H                               ; TEST FOR ALPHA
+   257  00e0  3003                      JR      NC,ALPH                           ;
+   258  00e2  e60f                      AND     0FH                               ; GET THE BITS
+   259  00e4  c9                        RET                                       ;
+   260                          ALPH:
+   261  00e5  e60f                      AND     0FH                               ; GET THE BITS
+   262  00e7  c609                      ADD     A,09H                             ; MAKE IT HEX A-F
+   263  00e9  c9                        RET                                       ;
+   264                          
+   265                          
+   266                          
+   267                          
+   268                          ;__HXOUT_________________________________________________________________________________________________________________________
+   269                          ;
+   270                          ;	PRINT THE ACCUMULATOR CONTENTS AS HEX DATA
+   271                          ;________________________________________________________________________________________________________________________________
+   272                          ;
+   273                          HXOUT:
+   274  00ea  c5                        PUSH    BC                                ; SAVE BC
+   275  00eb  f5                        PUSH    AF                                ;
+   276  00ec  47                        LD      B,A                               ;
+   277  00ed  cb07                      RLC     A                                 ; DO HIGH NIBBLE FIRST
+   278  00ef  cb07                      RLC     A                                 ;
+   279  00f1  cb07                      RLC     A                                 ;
+   280  00f3  cb07                      RLC     A                                 ;
+   281  00f5  e60f                      AND     0FH                               ; ONLY THIS NOW
+   282  00f7  c630                      ADD     A,30H                             ; TRY A NUMBER
+   283  00f9  fe3a                      CP      3AH                               ; TEST IT
+   284  00fb  3802                      JR      C,OUT1                            ; IF CY SET PRINT 'NUMBER'
+   285  00fd  c607                      ADD     A,07H                             ; MAKE IT AN ALPHA
+   286                          OUT1:
+   287  00ff  cda800                    CALL    prnchar                           ; SCREEN IT
+   288  0102  78                        LD      A,B                               ; NEXT NIBBLE
+   289  0103  e60f                      AND     0FH                               ; JUST THIS
+   290  0105  c630                      ADD     A,30H                             ; TRY A NUMBER
+   291  0107  fe3a                      CP      3AH                               ; TEST IT
+   292  0109  3802                      JR      C,OUT2                            ; PRINT 'NUMBER'
+   293  010b  c607                      ADD     A,07H                             ; MAKE IT ALPHA
+   294                          OUT2:
+   295  010d  cda800                    CALL    prnchar                           ; SCREEN IT
+   296  0110  f1                        POP     AF                                ;
+   297  0111  c1                        POP     BC                                ; RESTORE BC
+   298  0112  c9                        RET                                       ;
+   299                          
+   300                          
+   301                          ;__SPACE_________________________________________________________________________________________________________________________
+   302                          ;
+   303                          ;	PRINT A SPACE CHARACTER
+   304                          ;________________________________________________________________________________________________________________________________
+   305                          ;
+   306                          SPACE:
+   307  0113  f5                        PUSH    AF                                ; STORE AF
+   308  0114  3e20                      LD      A,20H                             ; LOAD A "SPACE"
+   309  0116  cda800                    CALL    prnchar                             ; SCREEN IT
+   310  0119  f1                        POP     AF                                ; RESTORE AF
+   311  011a  c9                        RET                                       ; DONE
+   312                          
+   313                          ;__PRINTHL_______________________________________________________________________________________________________________________
+   314                          ;
+   315                          ;	PRINT THE HL REG
+   316                          ;________________________________________________________________________________________________________________________________
+   317                          ;
+   318                          PRINTHL:
+   319  011b  f5                        PUSH    AF
+   320  011c  7c                        LD      A,H                               ; GET HI BYTE
+   321  011d  cdea00                    CALL    HXOUT                             ; DO HEX OUT ROUTINE
+   322  0120  7d                        LD      A,L                               ; GET LOW BYTE
+   323  0121  cdea00                    CALL    HXOUT                             ; HEX IT
+   324  0124  cd1301                    CALL    SPACE                             ;
+   325  0127  f1                        POP     AF
+   326  0128  c9                        RET                                       ; DONE
+   327                          
+   328                          ;__MONPOUT__________________________________________________________________________________________________________________________
+   329                          ;
+   330                          ;	OUTPUT TO AN I/O PORT, MONITOR COMMAND "O"
+   331                          ;________________________________________________________________________________________________________________________________
+   332                          ;
+   333                          MONPOUT:
+   334                          POUT1:
+   335  0129  23                        INC     HL                                ;
+   336  012a  cdc900                    CALL    HEXIN                             ; GET PORT
+   337  012d  4f                        LD      C,A                               ; SAVE PORT POINTER
+   338  012e  23                        INC     HL                                ;
+   339  012f  cdc900                    CALL    HEXIN                             ; GET DATA
+   340                          OUTIT:
+   341  0132  ed79                      OUT     (C),A                             ;
+   342  0134  c31300                    JP      MONITORCMDLOOP                    ;
+   343                          
+   344                          
+   345                          ;__PIN___________________________________________________________________________________________________________________________
+   346                          ;
+   347                          ;	INPUT FROM AN I/O PORT, MONITOR COMMAND "I"
+   348                          ;________________________________________________________________________________________________________________________________
+   349                          ;
+   350                          PIN:
+   351  0137  23                        INC     HL                                ;
+   352  0138  cdc900                    CALL    HEXIN                             ; GET PORT
+   353  013b  4f                        LD      C,A                               ; SAVE PORT POINTER
+   354  013c  cdb400                    CALL    CRLF                              ;
+   355  013f  ed78                      IN      A,(C)                             ; GET DATA
+   356  0141  cdea00                    CALL    HXOUT                             ; SHOW IT
+   357  0144  c31300                    JP      MONITORCMDLOOP                    ;
+   358                          
+   359                          
+   360                          
+   361                          
+   362                          
+   363                          ;__CRLFA_________________________________________________________________________________________________________________________
+   364                          ;
+   365                          ;	PRINT COMMAND PROMPT
+   366                          ;________________________________________________________________________________________________________________________________
+   367                          ;
+   368                          CRLFA:
+   369  0147  e5                        PUSH    HL                                ; PROTECT HL FROM OVERWRITE
+   370  0148  216202                    LD      HL,PROMPT                         ;
+   371  014b  cd9200                    CALL    prn_text                          ;
+   372  014e  e1                        POP     HL                                ; PROTECT HL FROM OVERWRITE
+   373  014f  c9                        RET                                       ; DONE
+   374                          
+   375                          
+   376                          
+   377                          ;__MONRUN___________________________________________________________________________________________________________________________
+   378                          ;
+   379                          ;	TRANSFER OUT OF MONITOR, USER OPTION "R"
+   380                          ;________________________________________________________________________________________________________________________________
+   381                          ;
+   382                          MONRUN:
+   383  0150  23                        INC     HL                                ; SHOW READY
+   384  0151  cdbd00                    CALL    LDHL                              ; GET START ADDRESS
+   385  0154  e9                        JP      (HL)                              ;
+   386                          
+   387                          
+   388                          ;__PROGRM________________________________________________________________________________________________________________________
+   389                          ;
+   390                          ;	PROGRAM RAM LOCATIONS, USER OPTION "P"
+   391                          ;________________________________________________________________________________________________________________________________
+   392                          ;
+   393                          PROGRM:
+   394  0155  23                        INC     HL                                ; SHOW READY
+   395  0156  e5                        PUSH    HL                                ; STORE HL
+   396  0157  cdbd00                    CALL    LDHL                              ; GET START ADDRESS
+   397  015a  54                        LD      D,H                               ;
+   398  015b  5d                        LD      E,L                               ; DE POINTS TO ADDRESS TO PROGRAM
+   399  015c  e1                        POP     HL                                ;
+   400  015d  23                        INC     HL                                ;
+   401  015e  23                        INC     HL                                ;
+   402  015f  23                        INC     HL                                ;
+   403  0160  23                        INC     HL                                ;
+   404  0161  23                        INC     HL                                ;
+   405                          PROGRMLP:
+   406  0162  cdc900                    CALL    HEXIN                             ; GET NEXT HEX NUMBER
+   407  0165  12                        LD      (DE),A                            ; STORE IT
+   408  0166  13                        INC     DE                                ; NEXT ADDRESS;
+   409  0167  cd4701                    CALL    CRLFA                             ; CR,LF,>
+   410  016a  3e50                      LD      A,'P'                             ;
+   411  016c  cda800                    CALL    prnchar                             ;
+   412  016f  cd1301                    CALL    SPACE                             ;
+   413  0172  62                        LD      H,D                               ;
+   414  0173  6b                        LD      L,E                               ;
+   415  0174  cd1b01                    CALL    PRINTHL                           ;
+   416  0177  cd6600                    CALL    MONGETLN                          ; GET A LINE OF INPUT FROM THE USER
+   417  017a  7e                        LD      A,(HL)                            ; LOAD FIRST CHAR INTO A
+   418  017b  fe00                      CP      00H                               ; END OF LINE?
+   419  017d  ca8301                    JP      Z,PROGRMEXIT                      ; YES, EXIT
+   420  0180  c36201                    JP      PROGRMLP                          ; NO, LOOP
+   421                          PROGRMEXIT:
+   422  0183  c31300                    JP      MONITORCMDLOOP
+   423                          
+   424                          
+   425                          
+   426                          
+   427                          
+   428                          
+   429                          
+   430                          ;__DUMP__________________________________________________________________________________________________________________________
+   431                          ;
+   432                          ;	PRINT A MEMORY DUMP, USER OPTION "D"
+   433                          ;________________________________________________________________________________________________________________________________
+   434                          ;
+   435                          DUMP:
+   436  0186  23                        INC     HL                                ; SHOW READY
+   437  0187  e5                        PUSH    HL                                ; STORE HL
+   438  0188  cdbd00                    CALL    LDHL                              ; GET START ADDRESS
+   439  018b  54                        LD      D,H                               ;
+   440  018c  5d                        LD      E,L                               ;
+   441  018d  e1                        POP     HL                                ;
+   442  018e  d5                        PUSH    DE                                ; SAVE START
+   443  018f  23                        INC     HL                                ;
+   444  0190  23                        INC     HL                                ;
+   445  0191  23                        INC     HL                                ;
+   446  0192  23                        INC     HL                                ;
+   447  0193  23                        INC     HL                                ;
+   448  0194  cdbd00                    CALL    LDHL                              ; GET END ADDRESS
+   449  0197  23                        INC     HL                                ; ADD ONE MORE FOR LATER COMPARE
+   450  0198  eb                        EX      DE,HL                             ; PUT END ADDRESS IN DE
+   451  0199  e1                        POP     HL                                ; GET BACK START
+   452                          GDATA:
+   453  019a  cdb400                    CALL    CRLF                              ;
+   454                          BLKRD:
+   455  019d  cd1b01                    CALL    PRINTHL                           ; PRINT START LOCATION
+   456  01a0  0e08                      LD      C,8                               ; SET FOR 16 LOCS
+   457  01a2  e5                        PUSH    HL                                ; SAVE STARTING HL
+   458                          NXTONE:
+   459  01a3  d9                        EXX                                       ;
+   460  01a4  4b                        LD      C,E                               ;
+   461  01a5  ed78                      IN      A,(C)                             ;
+   462  01a7  d9                        EXX                                       ;
+   463  01a8  e67f                      AND     7FH                               ;
+   464  01aa  fe1b                      CP      ESC                               ;
+   465  01ac  ca1300                    JP      Z,MONITORCMDLOOP                  ;
+   466  01af  fe13                      CP      19                                ;
+   467  01b1  28f0                      JR      Z,NXTONE                          ;
+   468  01b3  7e                        LD      A,(HL)                            ; GET BYTE
+   469  01b4  cdea00                    CALL    HXOUT                             ; PRINT IT
+   470  01b7  cd1301                    CALL    SPACE                             ;
+   471                          UPDH:
+   472  01ba  23                        INC     HL                                ; POINT NEXT
+   473  01bb  0d                        DEC     C                                 ; DEC  LOC COUNT
+   474  01bc  20e5                      JR      NZ,NXTONE                         ; IF LINE NOT DONE
+   475                          ; NOW PRINT 'DECODED' DATA TO RIGHT OF DUMP
+   476                          PCRLF:
+   477  01be  cd1301                    CALL    SPACE                             ; SPACE IT
+   478  01c1  0e08                      LD      C,8                               ; SET FOR 16 CHARS
+   479  01c3  e1                        POP     HL                                ; GET BACK START
+   480                          PCRLF0:
+   481  01c4  7e                        LD      A,(HL)                            ; GET BYTE
+   482  01c5  e660                      AND     060H                              ; SEE IF A 'DOT'
+   483  01c7  7e                        LD      A,(HL)                            ; O K. TO GET
+   484  01c8  2002                      JR      NZ,PDOT                           ;
+   485  01ca  3e2e                      LD      A,2EH                             ; LOAD A DOT
+   486                          PDOT:
+   487  01cc  cda800                    CALL    prnchar                             ; PRINT IT
+   488  01cf  23                        INC     HL                                ;
+   489  01d0  7a                        LD      A,D                               ;
+   490  01d1  bc                        CP      H                                 ;
+   491  01d2  2005                      JR      NZ,UPDH1                          ;
+   492  01d4  7b                        LD      A,E                               ;
+   493  01d5  bd                        CP      L                                 ;
+   494  01d6  ca1300                    JP      Z,MONITORCMDLOOP                  ;
+   495                          ;
+   496                          ;IF BLOCK NOT DUMPED, DO NEXT CHARACTER OR LINE
+   497                          UPDH1:
+   498  01d9  0d                        DEC     C                                 ; DEC  CHAR COUNT
+   499  01da  20e8                      JR      NZ,PCRLF0                         ; DO NEXT
+   500                          CONTD:
+   501  01dc  cdb400                    CALL    CRLF                              ;
+   502  01df  c39d01                    JP      BLKRD                             ;
+   503                          
+   504                          
+   505                          
+   506                          
+   507                          ;__MOVE__________________________________________________________________________________________________________________________
+   508                          ;
+   509                          ;	MOVE MEMORY, USER OPTION "M"
+   510                          ;________________________________________________________________________________________________________________________________
+   511                          ;
+   512                          MOVE:
+   513  01e2  0e03                      LD      C,03
+   514                          ; START GETNM REPLACEMENT
+   515                          ; GET SOURCE STARTING MEMORY LOCATION
+   516  01e4  23                        INC     HL                                ; SHOW EXAMINE READY
+   517  01e5  e5                        PUSH    HL                                ;
+   518  01e6  cdbd00                    CALL    LDHL                              ; LOAD IN HL REGS
+   519  01e9  54                        LD      D,H                               ;
+   520  01ea  5d                        LD      E,L                               ;
+   521  01eb  e1                        POP     HL                                ;
+   522  01ec  d5                        PUSH    DE                                ; PUSH MEMORY ADDRESS ON STACK
+   523  01ed  23                        INC     HL                                ;
+   524  01ee  23                        INC     HL                                ;
+   525  01ef  23                        INC     HL                                ;
+   526  01f0  23                        INC     HL                                ;
+   527  01f1  23                        INC     HL                                ; PRINT SPACE SEPARATOR
+   528  01f2  e5                        PUSH    HL                                ;
+   529  01f3  cdbd00                    CALL    LDHL                              ; LOAD IN HL REGS
+   530  01f6  54                        LD      D,H                               ;
+   531  01f7  5d                        LD      E,L                               ;
+   532  01f8  e1                        POP     HL                                ;
+   533  01f9  d5                        PUSH    DE                                ; PUSH MEMORY ADDRESS ON STACK
+   534  01fa  23                        INC     HL                                ;
+   535  01fb  23                        INC     HL                                ;
+   536  01fc  23                        INC     HL                                ;
+   537  01fd  23                        INC     HL                                ;
+   538  01fe  23                        INC     HL                                ; PRINT SPACE SEPARATOR
+   539  01ff  cdbd00                    CALL    LDHL                              ; LOAD IN HL REGS
+   540  0202  e5                        PUSH    HL                                ; PUSH MEMORY ADDRESS ON STACK
+   541                          ; END GETNM REPLACEMENT
+   542  0203  d1                        POP     DE                                ; DEST
+   543  0204  c1                        POP     BC                                ; SOURCE END
+   544  0205  e1                        POP     HL                                ; SOURCE
+   545  0206  e5                        PUSH    HL                                ;
+   546  0207  7d                        LD      A,L                               ;
+   547  0208  2f                        CPL                                       ;
+   548  0209  6f                        LD      L,A                               ;
+   549  020a  7c                        LD      A,H                               ;
+   550  020b  2f                        CPL                                       ;
+   551  020c  67                        LD      H,A                               ;
+   552  020d  23                        INC     HL                                ;
+   553  020e  09                        ADD     HL,BC                             ;
+   554  020f  4d                        LD      C,L                               ;
+   555  0210  44                        LD      B,H                               ;
+   556  0211  e1                        POP     HL                                ;
+   557  0212  cd1802                    CALL    MOVE_LOOP                         ;
+   558  0215  c31300                    JP      MONITORCMDLOOP                    ; EXIT MOVE COMMAND ROUTINE
+   559                          MOVE_LOOP:
+   560  0218  7e                        LD      A,(HL)                            ; FETCH
+   561  0219  12                        LD      (DE),A                            ; DEPOSIT
+   562  021a  23                        INC     HL                                ; BUMP  SOURCE
+   563  021b  13                        INC     DE                                ; BUMP DEST
+   564  021c  0b                        DEC     BC                                ; DEC COUNT
+   565  021d  79                        LD      A,C                               ;
+   566  021e  b0                        OR      B                                 ;
+   567  021f  c21802                    JP      NZ,MOVE_LOOP                      ; TIL COUNT=0
+   568  0222  c9                        RET                                       ;
+   569                          
+   570                          ;__FILL__________________________________________________________________________________________________________________________
+   571                          ;
+   572                          ;	FILL MEMORY, USER OPTION "M"
+   573                          ;________________________________________________________________________________________________________________________________
+   574                          ;
+   575                          FILL:
+   576  0223  0e03                      LD      C,03                              ;
+   577                          ; START GETNM REPLACEMENT
+   578                          ; GET FILL STARTING MEMORY LOCATION
+   579  0225  23                        INC     HL                                ; SHOW EXAMINE READY
+   580  0226  e5                        PUSH    HL                                ;
+   581  0227  cdbd00                    CALL    LDHL                              ; LOAD IN HL REGS
+   582  022a  54                        LD      D,H                               ;
+   583  022b  5d                        LD      E,L                               ;
+   584  022c  e1                        POP     HL                                ;
+   585  022d  d5                        PUSH    DE                                ; PUSH MEMORY ADDRESS ON STACK
+   586  022e  23                        INC     HL                                ;
+   587  022f  23                        INC     HL                                ;
+   588  0230  23                        INC     HL                                ;
+   589  0231  23                        INC     HL                                ;
+   590  0232  23                        INC     HL                                ; PRINT SPACE SEPARATOR
+   591                          ; GET FILL ENDING MEMORY LOCATION
+   592  0233  e5                        PUSH    HL                                ;
+   593  0234  cdbd00                    CALL    LDHL                              ; LOAD IN HL REGS
+   594  0237  54                        LD      D,H                               ;
+   595  0238  5d                        LD      E,L                               ;
+   596  0239  e1                        POP     HL                                ;
+   597  023a  d5                        PUSH    DE                                ; PUSH MEMORY ADDRESS ON STACK
+   598  023b  23                        INC     HL                                ;
+   599  023c  23                        INC     HL                                ;
+   600  023d  23                        INC     HL                                ;
+   601  023e  23                        INC     HL                                ;
+   602  023f  23                        INC     HL                                ; PRINT SPACE SEPARATOR
+   603                          ; GET TARGET STARTING MEMORY LOCATION
+   604  0240  cdc900                    CALL    HEXIN                             ; GET K B. AND MAKE HEX
+   605  0243  4f                        LD      C,A                               ; PUT FILL VALUE IN F SO IT IS SAVED FOR LATER
+   606  0244  c5                        PUSH    BC                                ; PUSH FILL VALUE BYTE ON STACK
+   607                          ; END GETNM REPLACEMENT
+   608  0245  c1                        POP     BC                                ; BYTE
+   609  0246  d1                        POP     DE                                ; END
+   610  0247  e1                        POP     HL                                ; START
+   611  0248  71                        LD      (HL),C                            ;
+   612                          FILL_LOOP:
+   613  0249  71                        LD      (HL),C                            ;
+   614  024a  23                        INC     HL                                ;
+   615  024b  7b                        LD      A,E                               ;
+   616  024c  95                        SUB     L                                 ;
+   617  024d  47                        LD      B,A                               ;
+   618  024e  7a                        LD      A,D                               ;
+   619  024f  94                        SUB     H                                 ;
+   620  0250  b0                        OR      B                                 ;
+   621  0251  c24902                    JP      NZ,FILL_LOOP                      ;
+   622  0254  c31300                    JP      MONITORCMDLOOP                    ;
+   623                          
+   624                          
+   625                          ;
+   626                          ;__FILL_MEM_______________________________________________________________________________________________________________________
+   627                          ;
+   628                          ;	FUNCTION	: FILL MEMORY WITH A VALUE
+   629                          ;	INPUT		: HL = START ADDRESS BLOCK
+   630                          ;			: BC = LENGTH OF BLOCK
+   631                          ;			: A = VALUE TO FILL WITH
+   632                          ;	USES		: DE, BC
+   633                          ;	OUTPUT		:
+   634                          ;	CALLS		:
+   635                          ;	TESTED		: 13 FEB 2007
+   636                          ;_________________________________________________________________________________________________________________________________
+   637                          ;
+   638                          FILL_MEM:
+   639  0257  5d                        LD      E,L                               ;
+   640  0258  54                        LD      D,H                               ;
+   641  0259  13                        INC     DE                                ;
+   642  025a  77                        LD      (HL),A                            ; INITIALISE FIRST BYTE OF BLOCK WITH DATA BYTE IN A
+   643  025b  0b                        DEC     BC                                ;
+   644  025c  edb0                      LDIR                                      ; FILL MEMORY
+   645  025e  c9                        RET                                       ; RETURN TO CALLER
+   646                          
+   647                          
+   648                          
+   649                          ;
+   650                          ;__TEXT_STRINGS_________________________________________________________________________________________________________________
+   651                          ;
+   652                          ;	SYSTEM TEXT STRINGS
+   653                          ;_____________________________________________________________________________________________________________________________
+   654                          ;
+   655                          TCRLF:
+   656  025f  0d0a00                    DB      CR,LF,ENDT
+   657                          
+   658                          PROMPT:
+   659  0262  0d0a3e00                  DB      CR,LF,'>',ENDT
+   660                          
+   661                          TXT_IDENT:
+   662  0266  44554f44594e4520          DB      "DUODYNE TEST CARTRIDGE V0.1"
+              5445535420434152  
+              5452494447452056  
+              302e31            
+   663  0281  0d0a00                    DB      CR,LF,ENDT
+   664                          TXT_READY:
+   665  0284  4d4f4e49544f5220          DB      "MONITOR READY. "
+              52454144592e20    
+   666  0293  0d0a00                    DB      CR,LF,ENDT
+   667                          
+   668                          TXT_COMMAND:
+   669  0296  0d0a                      DB      CR,LF
+   670  0298  554e4b4e4f574e20          DB      "UNKNOWN COMMAND."
+              434f4d4d414e442e  
+   671  02a8  00                        DB      ENDT
+   672                          
+   673                          IN_BUFFER:
+   674  02a9  0000000000000000          DB      00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00
+              0000000000000000  
+              0000000000000000  
+   675  02c1  0000000000000000          DB      00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00
+              0000000000000000  
+              0000000000000000  
+   676  02d9  0000000000000000          DB      00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00
+              0000000000000000  
+              0000000000000000  
+   677  02f1  0000000000000000          DB      00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00
+              0000000000000000  
+              0000000000000000  
+   678                          

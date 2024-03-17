@@ -1,0 +1,36 @@
+gameload.asm:
+     1                          ;___GAME_LOADER________________________________________________________________________________________
+     2                          ;
+     3                          ;
+     4                          ;  CREATED BY : 	ANDREW LYNCH 15-FEB-2007
+     5                          ;  MODIFIED BY : 	DAN WERNER 11.7.2010
+     6                          ;
+     7                          ;______________________________________________________________________________________________________
+     8                          
+     9                          
+    10                          
+    11                          
+    12                          ;*******************************************************************
+    13                          ;*	START AFTER RESET
+    14                          ;*	FUNCTION	: READY SYSTEM, LOAD MONITOR INTO RAM AND START
+    15                          ;*******************************************************************
+    16                          
+    17                                  ORG     00100h
+    18                          
+    19  0000  f3                        DI                                        ; DISABLE INTERRUPT
+    20                          
+    21  0001  210f00                    LD      HL,BEGIN_CODE                     ; FROM
+    22  0004  1100ff                    LD      DE,$FF00                          ; TO
+    23  0007  013000                    LD      BC,$0030                          ; NUMBER OF BYTES TO MOVE
+    24  000a  edb0                      LDIR                                      ; PERFORM BLOCK COPY
+    25  000c  c300ff                    JP      $FF00                             ; JUMP TO START
+    26                          
+    27                          
+    28                          BEGIN_CODE:
+    29  000f  211d00                    LD      HL,END_CODE                       ; FROM
+    30  0012  110000                    LD      DE,$0000                          ; TO
+    31  0015  0100d0                    LD      BC,$D000                          ; NUMBER OF BYTES TO MOVE
+    32  0018  edb0                      LDIR                                      ; PERFORM BLOCK COPY
+    33  001a  c30000                    JP      $0000                             ; JUMP TO START
+    34                          END_CODE:
+    35                          

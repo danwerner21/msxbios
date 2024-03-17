@@ -1,0 +1,5 @@
+BEGIN_CODE                      = $010F ; addr, local, , gameload, , gameload.asm:28
+END_CODE                        = $011D ; addr, local, , gameload, , gameload.asm:34
+__head                          = $0100 ; const, public, def, , ,
+__tail                          = $011D ; const, public, def, , ,
+__size                          = $001D ; const, public, def, , ,

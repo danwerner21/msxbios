@@ -1,0 +1,3 @@
+__head                          = $0000 ; const, public, def, , ,
+__tail                          = $4000 ; const, public, def, , ,
+__size                          = $4000 ; const, public, def, , ,
